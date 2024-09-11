@@ -49,7 +49,7 @@ enum {
     TE_CLOSURE0 = 16, TE_CLOSURE1, TE_CLOSURE2, TE_CLOSURE3,
     TE_CLOSURE4, TE_CLOSURE5, TE_CLOSURE6, TE_CLOSURE7,
 
-    TE_FLAG_PURE = 32
+    TE_FLAG_PURE = 32,
 };
 
 typedef struct te_variable {

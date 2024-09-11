@@ -56,7 +56,8 @@ typedef double (*te_fun2)(double, double);
 
 enum {
     TOK_NULL = TE_CLOSURE7+1, TOK_ERROR, TOK_END, TOK_SEP,
-    TOK_OPEN, TOK_CLOSE, TOK_NUMBER, TOK_VARIABLE, TOK_INFIX
+    TOK_OPEN, TOK_CLOSE, TOK_NUMBER, TOK_VARIABLE, TOK_INFIX,
+    TOK_TERNARY_COND, TOK_TERNARY_ELSE
 };
 
 
@@ -234,6 +235,7 @@ static double mul(double a, double b) {return a * b;}
 static double divide(double a, double b) {return a / b;}
 static double negate(double a) {return -a;}
 static double comma(double a, double b) {(void)a; return b;}
+static double ternary(double a, double b, double c) {return a == 0 ? b : c;}
 
 
 void next_token(state *s) {
@@ -293,6 +295,8 @@ void next_token(state *s) {
                     case '%': s->type = TOK_INFIX; s->function = fmod; break;
                     case '(': s->type = TOK_OPEN; break;
                     case ')': s->type = TOK_CLOSE; break;
+                    case '?': s->type = TOK_TERNARY_COND; break;
+                    case ':':s->type = TOK_TERNARY_ELSE; break;
                     case ',': s->type = TOK_SEP; break;
                     case ' ': case '\t': case '\n': case '\r': break;
                     default: s->type = TOK_ERROR; break;
@@ -567,15 +571,46 @@ static te_expr *expr(state *s) {
     return ret;
 }
 
+static te_expr *pack_ternary(state *s)
+{
+    /* <ternary>      =    <expr> {"?" <expr> ":" <expr>} */
+
+    te_expr *ret = expr(s);
+    CHECK_NULL(ret);
+
+    while (s->type == TOK_TERNARY_COND)
+    {
+        next_token(s);
+        te_expr *true_expr = expr(s);
+
+        if (s->type == TOK_TERNARY_ELSE)
+        {
+            next_token(s);
+            te_expr *false_expr = expr(s);
+
+            ret = NEW_EXPR(TE_FUNCTION3, ret, true_expr, false_expr);
+            CHECK_NULL(ret, te_free(false_expr), te_free(true_expr));
+
+            ret->function = ternary;
+        }
+        else
+        {
+            CHECK_NULL(ret, te_free(ret), te_free(true_expr));
+            return NULL;
+        }
+    }
+
+    return ret;
+}
 
 static te_expr *list(state *s) {
-    /* <list>      =    <expr> {"," <expr>} */
-    te_expr *ret = expr(s);
+    /* <list>      =    <ternary> {"," <ternary>} */
+    te_expr *ret = pack_ternary(s);
     CHECK_NULL(ret);
 
     while (s->type == TOK_SEP) {
         next_token(s);
-        te_expr *e = expr(s);
+        te_expr *e = pack_ternary(s);
         CHECK_NULL(e, te_free(ret));
 
         te_expr *prev = ret;
